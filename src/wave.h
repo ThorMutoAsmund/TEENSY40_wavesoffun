@@ -4,7 +4,7 @@
 #include <Arduino.h>
 #include "patch.h"
 
-#define NUM_OTS 12
+#define NUM_OTS 36
 
 #define ATK_STAGE 0
 #define HLD_STAGE 1
@@ -23,7 +23,7 @@ public:
 	void setPatch(Patch *patch);
 	void reset(uint64_t base_freq);
 	void release();
-	uint8_t ahdsr_stage;
+	uint8_t ahdsr_stage = OFF_STAGE;
 private:
 	Patch *patch;
 	uint16_t audioBlockSamples;
@@ -35,6 +35,8 @@ private:
 	uint64_t tone_amp[NUM_OTS+1];
 	uint64_t tone_rate[NUM_OTS+1];	
 	uint64_t amp = 0;
+	uint64_t next_base_freq = 0;
+	int16_t lastValue;
 	uint32_t atk_t;
 	uint32_t atk_tmax;
 	uint64_t atk_ampls20;
@@ -47,6 +49,7 @@ private:
 	uint64_t sus_amp;
 	uint32_t rel_t;
 	uint32_t rel_tmax;
+	void actualReset();
 };
 
 #endif

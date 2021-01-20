@@ -7,9 +7,11 @@
 void Wave::update(int16_t *bp, bool clear)
 {
     // 61290 med AHDSR 61525 med smart mult 61700 uden AHDSR
-    int32_t v;
+    int32_t shiftedVal;
+    int16_t newValue;
     for (int i = 0; i < audioBlockSamples; i++)
     {
+        recalc:
         switch (ahdsr_stage)
         {
             case ATK_STAGE:
@@ -59,26 +61,43 @@ void Wave::update(int16_t *bp, bool clear)
 
         if (ahdsr_stage == OFF_STAGE)
         {
-            for (int j = i; j < audioBlockSamples; j++)
+            if (clear)
             {
-                *bp++ = 0;
+                for (int j = i; j < audioBlockSamples; j++)
+                {
+                    *bp++ = 0;
+                }
             }
             break;
         }
         
-        v = 0L;
+        shiftedVal = 0;
         for (int o=0; o<num_ots; ++o)
         {        
             q31_t a = arm_sin_q31((uint32_t)((tone_phase[o] >> 15) & 0x7fffffff));    
-            v += ((a>>16) * tone_amp[o] * amp) >> 10;
+            shiftedVal += ((a>>16) * tone_amp[o] * amp) >> 10;
             tone_phase[o] += tone_rate[o];
             if (tone_phase[o] & 0x800000000000LL)
             {
                 tone_phase[o] &= 0x7fffffffffffLL;
             }
         }
-        
-        *bp = clear ? (uint16_t)(v >> 15) : *bp + (uint16_t)(v >> 15);
+
+        newValue = (int16_t)(shiftedVal >> 15);
+
+        if (next_base_freq)
+        {
+            if  (lastValue < 0 && newValue >= 0)
+            {
+                actualReset();
+                next_base_freq = 0;
+                goto recalc;
+            }
+        }
+
+        *bp = clear ? newValue : *bp + newValue;
+        lastValue = newValue;       
+
         bp++;
 
         switch (ahdsr_stage)
@@ -190,7 +209,17 @@ void Wave::setPatch(Patch *patch)
 
 void Wave::reset(uint64_t base_freq)
 {
-    this->base_freq = base_freq;
+    next_base_freq = base_freq;
+    if (ahdsr_stage == OFF_STAGE)
+    {
+        actualReset();
+    }
+    
+}
+
+void Wave::actualReset()
+{
+    base_freq = next_base_freq;
 
     uint8_t o = 0;
     uint64_t tone_freq = 0LL;
