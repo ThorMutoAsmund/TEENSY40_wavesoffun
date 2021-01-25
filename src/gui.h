@@ -50,7 +50,7 @@ private:
 
     const char* otLabels[MOD_PATCH_OT] = { "BASE    ", "HARMONIC" };
     const char* otAmpLabels[MOD_PATCH_OT_AMP] = { "1 OVR T ", "1 OVR TT" };
-    const char* ahdsrShapeLabels[MOD_PATCH_AHDSR_SHAPE_OPTIONS] = { "LINEAR  ", "ESI CUBE", "ESI QUAD", "ESO CUBE", "ESO QUAD" };
+    const char* ahdsrShapeLabels[MOD_PATCH_AHDSR_SHAPE_OPTIONS] = { "LINEAR  ", "SQUARE  " };
 
     const char* lev1Menus[MOD_TOP_MENUS] = { "PRESET  ", "OVERTONE", "AHDSR   ", "MENU4   ", "SYSTEM  " };
     const char* presetMenuLabels[MOD_PRESET_MENUS] = { "SINE    ", "TRI     ", "SAW     ", "SQUARE  ", "CIR     ", "STEPSAW " };

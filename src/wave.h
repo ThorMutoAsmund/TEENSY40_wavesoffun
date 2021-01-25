@@ -22,7 +22,7 @@ public:
 	void update(int16_t *bp, bool clear);
 	void setPatch(Patch *patch);
 	void reset(uint64_t base_freq);
-	void release();
+	void release() { actualReset(true); }
 	uint8_t ahdsr_stage = OFF_STAGE;
 private:
 	Patch *patch;
@@ -34,22 +34,34 @@ private:
 	uint64_t tone_phase[NUM_OTS+1];
 	uint64_t tone_amp[NUM_OTS+1];
 	uint64_t tone_rate[NUM_OTS+1];	
-	uint64_t amp = 0;
+	uint32_t amp = 0;
 	uint64_t next_base_freq = 0;
 	int16_t lastValue;
-	uint32_t atk_t;
-	uint32_t atk_tmax;
-	uint64_t atk_ampls20;
-	uint32_t hld_t;
-	uint32_t hld_tmax;
-	uint64_t hld_amp;
-	uint32_t dec_t;
-	uint32_t dec_tmax;
-	uint64_t dec_ampls20;
-	uint64_t sus_amp;
-	uint32_t rel_t;
-	uint32_t rel_tmax;
-	void actualReset();
+	uint32_t max;
+	
+	uint64_t atk;
+	uint64_t atk_d;
+	uint64_t atk_dd;
+	uint64_t atk_max;
+	uint32_t atk_idx;
+	
+	uint32_t hld;
+	uint32_t hld_max;
+	
+	uint64_t dec;
+	uint64_t dec_d;
+	uint64_t dec_dd;
+	uint64_t dec_min;
+	uint32_t dec_idx;
+	
+	uint32_t sus_amp;
+
+	uint64_t rel;
+	uint64_t rel_d;
+	uint64_t rel_dd;
+	uint32_t rel_idx;
+
+	void actualReset(bool releaseOnly);
 };
 
 #endif

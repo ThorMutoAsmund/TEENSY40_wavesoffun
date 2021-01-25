@@ -15,45 +15,86 @@ void Wave::update(int16_t *bp, bool clear)
         switch (ahdsr_stage)
         {
             case ATK_STAGE:
-                amp = (atk_ampls20 * atk_t) >> 20;
-                if (atk_t >= atk_tmax)
+                amp = atk >> 22;
+                switch (patch->ahdsr_attack_shape)
                 {
+                    case PATCH_AHDSR_SHAPE_LIN:
+                        atk += atk_d;
+                        // atk -= atk_d;
+                        break;
+                    case PATCH_AHDSR_SHAPE_EASE2:
+                        atk = atk + 2 * atk_d - ((atk_idx * atk_dd)>>16);
+                        atk_idx += 2;
+                        break;
+                }
+                if (atk >= atk_max)
+                {
+                    amp = max;
                     ahdsr_stage = HLD_STAGE;
-                    if (hld_t == hld_tmax)
+                    if (hld >= hld_max)
                     {
                         ahdsr_stage = DEC_STAGE;
-                        if (dec_t == dec_tmax)
+                        if (dec <= dec_min)
                         {
+                            amp = sus_amp;
                             ahdsr_stage = SUS_STAGE;
                         }
                     }
                 }
                 break;
-            case HLD_STAGE:
-                amp = hld_amp;
-                if (hld_t >= hld_tmax)
+
+            case HLD_STAGE:                
+                hld++;
+                if (hld >= hld_max)
                 {
                     ahdsr_stage = DEC_STAGE;
-                    if (dec_t == dec_tmax)
+                    if (dec <= dec_min)
                     {
+                        amp = sus_amp;
                         ahdsr_stage = SUS_STAGE;
                     }
                 }
                 break;
+
             case DEC_STAGE:
-                amp = hld_amp - ((dec_ampls20 * dec_t) >> 20);
-                if (dec_t >= dec_tmax)
+                amp = dec >> 22;
+                switch (patch->ahdsr_decay_shape)
                 {
+                    case PATCH_AHDSR_SHAPE_LIN:
+                        dec -= dec_d;
+                        break;
+                    case PATCH_AHDSR_SHAPE_EASE2:
+                        dec = dec - 2 * dec_d + ((dec_idx * dec_dd)>>16);
+                        dec_idx += 2;
+                        break;
+                }
+                if (dec <= dec_min)
+                {
+                    amp = sus_amp;
                     ahdsr_stage = SUS_STAGE;
                 }
                 break;
+
             case SUS_STAGE:
-                amp = sus_amp;
                 break;
+
             case REL_STAGE:
-                amp = ((dec_ampls20 * (rel_tmax-rel_t)) >> 20);
-                if (rel_t >= rel_tmax)
+                amp = rel >> 22;
+
+                switch (patch->ahdsr_release_shape)
                 {
+                    case PATCH_AHDSR_SHAPE_LIN:
+                        rel -= rel_d;
+                        break;
+                    case PATCH_AHDSR_SHAPE_EASE2:
+                        rel = rel - 2 * rel_d + ((rel_idx * rel_dd)>>16);
+                        rel_idx += 2;
+                        break;
+                }
+
+                if (rel & 0x8000000000000000)
+                {
+                    amp = 0L;
                     ahdsr_stage = OFF_STAGE;
                 }
                 break;
@@ -89,7 +130,7 @@ void Wave::update(int16_t *bp, bool clear)
         {
             if  (lastValue < 0 && newValue >= 0)
             {
-                actualReset();
+                actualReset(false);
                 next_base_freq = 0;
                 goto recalc;
             }
@@ -99,49 +140,89 @@ void Wave::update(int16_t *bp, bool clear)
         lastValue = newValue;       
 
         bp++;
-
-        switch (ahdsr_stage)
-        {
-            case ATK_STAGE:
-                atk_t++;
-                break;
-            case HLD_STAGE:
-                hld_t++;
-                break;
-            case DEC_STAGE:
-                dec_t++;
-                break;
-            case REL_STAGE:
-                rel_t++;
-                break;
-        }
     }
 }
 
-// void Wave::update(int16_t *bp, bool clear)
-// {
-//     for (int i = 0; i < audioBlockSamples; i++)
-//     {
-//         uint64_t amp = 1;//atk_ampls10;// * (atk_t+i) / atk_tmax;
+void Wave::actualReset(bool releaseOnly)
+{
+    uint32_t freq_div;
+    uint32_t final_level;
 
-//         int32_t v = 0L;
-//         for (int o=0; o<=NUM_OTS; ++o)
-//         {        
-//             q31_t w = arm_sin_q31((uint32_t)((tone_phase[o] >> 15) & 0x7fffffff));    
-//             v += (int16_t) (((w>>16) * tone_amp[o] * amp) ); // >> 10
-//             tone_phase[o] += tone_rate[o];
-//             if (tone_phase[o] & 0x800000000000LL)
-//             {
-//                 tone_phase[o] &= 0x7fffffffffffLL;
-//             }
-//         }
-        
-//         *bp = clear ? (uint16_t)(v >> 15) : *bp + (uint16_t)(v >> 15);
-//         bp++;
-//     }
+    if (!releaseOnly)
+    {
+        base_freq = next_base_freq;
 
-//     atk_t += audioBlockSamples;
-// }
+        uint8_t o = 0;
+        uint64_t tone_freq = 0LL;
+
+        // OT
+        while (o <= NUM_OTS)
+        {
+            switch (this->patch->ot_type)
+            {
+                case PATCH_OT_BASE:
+                case PATCH_OT_HARMONIC:
+                    tone_freq = ((uint64_t)base_freq*tone_ot[o]);
+                    break;
+                break;
+            }
+            tone_rate[o] = (tone_freq<<14) / (int) sampleRate;
+            tone_phase[o] = 0LL;
+
+            o++;
+            
+            if (this->patch->ot_type == PATCH_OT_BASE || !this->patch->ot_phase_type)
+            {
+                while (o <= NUM_OTS)
+                {
+                    tone_rate[o] = 0LL;
+                    tone_phase[o] = 0LL;
+                    o++;
+                }
+            }
+        }
+
+        // AHDSR
+        max = 1L << 10;
+        atk_idx = 1L;
+        dec_idx = 1L;
+        rel_idx = 1L;
+
+        // ATK
+        atk = 0LL;
+        atk_max = 1LL<<32;
+        freq_div = patch->ahdsr_attack_time * sampleRate / 1000L;
+        atk_d = atk_max/freq_div;
+        atk_dd = (atk_d*atk_d)>>16;
+
+        // HLD
+        hld = 0L;
+        hld_max = patch->ahdsr_hold_time * sampleRate / 1000L;
+
+        // DEC
+        final_level = (((1000LL-patch->ahdsr_sustain_level)<<24)/1000);// == 0.8 << 24 for 20% sustainlevel
+        freq_div = patch->ahdsr_decay_time * sampleRate / 1000L;  // == 44100 for 1 sec decay
+
+        dec = atk_max;                                       // == 1.0 << 32
+        dec_d = (((uint64_t)final_level)<<8)/freq_div;                           // == 0.8/44100 << 32
+        dec_dd = (dec_d*dec_d)>>16;
+        dec_min = ((((uint64_t)patch->ahdsr_sustain_level)<<32)/1000);        
+
+        // SUS
+        sus_amp = (((uint64_t)patch->ahdsr_sustain_level) << 10) / 1000L;
+
+        ahdsr_stage = ATK_STAGE;
+    }
+    else
+    {
+        // Fade out from current amp level
+        freq_div = patch->ahdsr_release_time * sampleRate / 1000L;
+        rel = amp<<22;
+        rel_d = rel/freq_div;
+        rel_dd = (rel_d*rel_d)>>16;
+        ahdsr_stage = REL_STAGE;
+    }
+}
 
 
 void Wave::setPatch(Patch *patch)
@@ -212,70 +293,7 @@ void Wave::reset(uint64_t base_freq)
     next_base_freq = base_freq;
     if (ahdsr_stage == OFF_STAGE)
     {
-        actualReset();
+        actualReset(false);
     }
     
-}
-
-void Wave::actualReset()
-{
-    base_freq = next_base_freq;
-
-    uint8_t o = 0;
-    uint64_t tone_freq = 0LL;
-
-    // OT
-    while (o <= NUM_OTS)
-    {
-        switch (this->patch->ot_type)
-        {
-            case PATCH_OT_BASE:
-            case PATCH_OT_HARMONIC:
-                tone_freq = ((uint64_t)base_freq*tone_ot[o]);
-                break;
-            break;
-        }
-        tone_rate[o] = (tone_freq<<14) / (int) sampleRate;
-        tone_phase[o] = 0LL;
-
-        o++;
-        
-        if (this->patch->ot_type == PATCH_OT_BASE || !this->patch->ot_phase_type)
-        {
-            while (o <= NUM_OTS)
-            {
-                tone_rate[o] = 0LL;
-                tone_phase[o] = 0LL;
-                o++;
-            }
-        }
-    }
-
-    // AHDSR
-    atk_t = 0L;
-    atk_tmax = patch->ahdsr_attack_time * sampleRate / 1000L;
-    atk_ampls20 = (1 << 30) / atk_tmax;
-
-    hld_t = 0L;
-    hld_tmax = patch->ahdsr_hold_time * sampleRate / 1000L;
-    hld_amp = (1 << 10);
-
-    dec_t = 0L;
-    dec_tmax = patch->ahdsr_decay_time * sampleRate / 1000L;
-
-    dec_ampls20 = ((1000-(uint64_t)patch->ahdsr_sustain_level) << 30) / (1000LL * dec_tmax);
-
-    sus_amp = (((uint64_t)patch->ahdsr_sustain_level) << 10) / 1000L;
-
-    rel_t = 0L;
-    rel_tmax = patch->ahdsr_release_time * sampleRate / 1000L;
-
-    ahdsr_stage = ATK_STAGE;
-}
-
-void Wave::release()
-{
-    // Fade out from current amp level
-    dec_ampls20 = (amp << 20) / rel_tmax;
-    ahdsr_stage = REL_STAGE;
 }

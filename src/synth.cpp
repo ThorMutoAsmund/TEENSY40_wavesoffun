@@ -113,13 +113,13 @@ void Synth::execPreset(uint8_t type)
             patch.ot_amp_type = PATCH_OT_AMP_1_T;
             break;
     }
-    patch.ahdsr_attack_time = 50;
+    patch.ahdsr_attack_time = 20;
     patch.ahdsr_attack_shape = PATCH_AHDSR_SHAPE_LIN;
     patch.ahdsr_hold_time = 0;
-    patch.ahdsr_decay_time = 100;
-    patch.ahdsr_decay_shape = PATCH_AHDSR_SHAPE_LIN;
-    patch.ahdsr_sustain_level = 1000;
-    patch.ahdsr_release_time = 2000;
+    patch.ahdsr_decay_time = 20;
+    patch.ahdsr_decay_shape = PATCH_AHDSR_SHAPE_LIN;//PATCH_AHDSR_SHAPE_LIN;
+    patch.ahdsr_sustain_level = 100;
+    patch.ahdsr_release_time = 500;
     patch.ahdsr_release_shape = PATCH_AHDSR_SHAPE_LIN;
 
     patchChanged();
