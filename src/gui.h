@@ -6,7 +6,7 @@
 #include "patch.h"
 #include "synth.h"
 
-#define MOD_TOP_MENUS 5
+#define MOD_LEV1_MENUS 4
 #define MOD_PRESET_MENUS 6
 #define MOD_SYSTEM_MENUS 2
 #define MOD_AHDSR_MENUS 8
@@ -25,15 +25,14 @@ public:
     void buttonClick(bool longPress);
     void blink();
     void flashLed();
+    void displayUINT16(uint16_t value);
 private:
-    bool menuClick(bool longPress, uint8_t button);
     bool selectMenu(uint8_t mode, uint8_t button);
     bool patchMenu(uint8_t mode, uint8_t button);
-    bool topMenu(uint8_t mode, uint8_t button);
+    bool editMenu(uint8_t mode, uint8_t button);
     bool presetMenu(uint8_t mode, uint8_t button);
     bool overtoneMenu(uint8_t mode, uint8_t button);
     bool ahdsrMenu(uint8_t mode, uint8_t button);
-    bool menu4(uint8_t mode, uint8_t button);
     bool systemMenu(uint8_t mode, uint8_t button);
     
     void displayValue(const PatchValueDef *def, Patch *patch);
@@ -48,11 +47,12 @@ private:
 
     void execPreset(uint8_t type);
 
+    const char* naLabel = "   NA   " ;
     const char* otLabels[MOD_PATCH_OT] = { "BASE    ", "HARMONIC" };
     const char* otAmpLabels[MOD_PATCH_OT_AMP] = { "1 OVR T ", "1 OVR TT" };
     const char* ahdsrShapeLabels[MOD_PATCH_AHDSR_SHAPE_OPTIONS] = { "LINEAR  ", "SQUARE  " };
 
-    const char* lev1Menus[MOD_TOP_MENUS] = { "PRESET  ", "OVERTONE", "AHDSR   ", "MENU4   ", "SYSTEM  " };
+    const char* lev1Menus[MOD_LEV1_MENUS] = { "PRESET  ", "OVERTONE", "AHDSR   ", "SYSTEM  " };
     const char* presetMenuLabels[MOD_PRESET_MENUS] = { "SINE    ", "TRI     ", "SAW     ", "SQUARE  ", "CIR     ", "STEPSAW " };
     const char* ahdsrMenuLabels[MOD_AHDSR_MENUS] = { "ATK TIME", "ATK SHAP", "HLD TIME", "DEC TIME", "DEC SHAP", "SUS LEVL", "REL TIME", "REL SHAP" };
     const char* systemMenuLabels[MOD_SYSTEM_MENUS] = { "CPU LEFT", "CLK SPED" };

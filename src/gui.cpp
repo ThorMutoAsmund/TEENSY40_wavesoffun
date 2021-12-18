@@ -1,14 +1,42 @@
 #include "gui.h"
 #include "globals.h"
 
-#define MENU_DISPLAY 0
-#define MENU_CLICK 1
-#define MENU_LONG_PRESS 2
+#define BTNMODE_DISPLAY 0
+#define BTNMODE_CLICK 1
+#define BTNMODE_LONG_PRESS 2
 
-#define BTN_BACK 12
+#define BTN_OK 12
 #define BTN_PREV 13
 #define BTN_NEXT 14
-#define BTN_OK 15
+#define BTN_BACK 15
+
+
+#define MENU_MASK 0x000f
+#define SUBMENU_MASK 0x00f0
+#define VALUEMENU_MASK 0x0F00
+#define MENU_WELCOME 0
+#define MENU_PATCH 1
+#define MENU_FIRST 2
+#define MENU_PRESET 2
+#define MENU_OVERTONE 3
+#define MENU_AHDSR 4
+#define MENU_SYSTEM 5
+
+#define SUBMENU_CPULOAD 0x10
+#define SUBMENU_CLKSPEED 0x20
+
+// Menus
+// 0x0000 Welcome
+// 0x0001 Patch
+// 0x0002 = Edit, select "PRESET" when ok clicked
+// 0x0003 = Edit, select "OVERTONE" when ok clicked
+// 0x0004 = Edit, select "AHDSR" when ok clicked
+// 0x0005 = Edit, select "SYSTEM"  when ok clicked
+// 0x0012 Preset/Sine
+// 0x0022 Preset/Tri
+// 0x0032 Preset/Saw
+// 0x0042 Preset/Square
+// Etc
 
 Gui gui;
 bool ledIsOn = false;
@@ -49,11 +77,11 @@ void Gui::reset()
 {
     bank = 0;
     pno = 0;
-    menu = 0;
+    menu = MENU_WELCOME;
     tm1638.writeln("WELCOME ", 0);
     delay(1000);
-    menu = 1;
-    selectMenu(MENU_DISPLAY, 0);
+    menu = MENU_PATCH;
+    selectMenu(BTNMODE_DISPLAY, 0);
 }
 
 void Gui::flashLed()
@@ -67,7 +95,7 @@ void Gui::flashLed()
 
 void Gui::blink()
 {    
-   if ((menu & 0x000f) == 1 && nextBank)
+   if (menu == MENU_PATCH && nextBank)
     {
         tm1638.toggle(4);
     }
@@ -77,60 +105,58 @@ void Gui::buttonClick(bool longPress)
 {
     uint8_t button = tm1638.pressedButton();
 
-    if ((button != 0xff || longPress) && menuClick(longPress, button))
+    if ((button != 0xff || longPress) && selectMenu(longPress ? BTNMODE_LONG_PRESS : BTNMODE_CLICK, button))
     {
-        selectMenu(MENU_DISPLAY, 0);
+        selectMenu(BTNMODE_DISPLAY, 0);
     }
-}
-
-bool Gui::menuClick(bool longPress, uint8_t button)
-{
-    return selectMenu(longPress ? MENU_LONG_PRESS : MENU_CLICK, button);
 }
 
 bool Gui::selectMenu(uint8_t mode, uint8_t button)
 {
     switch (menu & 0x000f)
     {
-        case 1: 
+        case MENU_WELCOME:
+            return false;
+        case MENU_PATCH: 
             return patchMenu(mode, button);
         default:
-            if (menu & 0x00f0)
+            if (menu & SUBMENU_MASK)
             {
-                switch (menu & 0x000f)
+                switch (menu & MENU_MASK)
                 {
-                    case 2: 
+                    case MENU_PRESET: 
                         return presetMenu(mode, button);
-                    case 3: 
+                    case MENU_OVERTONE: 
                         return overtoneMenu(mode, button);
-                    case 4: 
+                    case MENU_AHDSR: 
                         return ahdsrMenu(mode, button);
-                    case 5: 
-                        return menu4(mode, button);
-                    case 6: 
+                    case MENU_SYSTEM: 
                         return systemMenu(mode, button);
                     default:
-                        menu = (menu & 0xFF0F); // Safety valve
                         return false;
                 }
             }
             else
             {
-                return topMenu(mode, button); 
+                return editMenu(mode, button); 
             }
     }
 }
 
 bool Gui::patchMenu(uint8_t mode, uint8_t button)
 {
-    if (mode == MENU_LONG_PRESS)
+    if (mode == BTNMODE_LONG_PRESS)
     {
+        if (button < 8)
+        {
+            return false;
+        }
         nextBank = 0;
         tm1638.clearToggle(4);
-        menu = (menu & 0xfff0) | 2;
+        menu = (button - 8 < MOD_LEV1_MENUS ? button - 8 : 0) + MENU_FIRST;
         return true;
     }
-    else if (mode == MENU_CLICK)
+    else if (mode == BTNMODE_CLICK)
     {
         uint8_t button = tm1638.pressedButton();
         if (button < 8)
@@ -139,12 +165,12 @@ bool Gui::patchMenu(uint8_t mode, uint8_t button)
         }
         else if (button < 16)
         {
-            nextBank = button & 0x07;
+            nextBank = button;
         }
 
         if (nextBank != 0 && button < 8)
         {
-            bank = nextBank;
+            bank = nextBank & 0x07;
             nextBank = 0;
             tm1638.clearToggle(4);
         }
@@ -152,32 +178,32 @@ bool Gui::patchMenu(uint8_t mode, uint8_t button)
 
     // Display
     tm1638.write("  -", 0);
-    tm1638.write((char)(nextBank ? nextBank : bank)+'A', 3);
+    tm1638.write((char)(nextBank ? nextBank & 0x07 : bank)+'A', 3);
     tm1638.write((char)pno+'1', 4);
     tm1638.writeln("-  ", 5);
 
     return false;
 }
 
-bool Gui::topMenu(uint8_t mode, uint8_t button)
+bool Gui::editMenu(uint8_t mode, uint8_t button)
 {
-    if (mode == MENU_LONG_PRESS)
+    if (mode == BTNMODE_LONG_PRESS)
     {
         return false;
     }
-    else if (mode == MENU_CLICK)
+    else if (mode == BTNMODE_CLICK)
     {
         if (button == BTN_BACK)
         {
-            menu = (menu & 0x0000) | 1;
+            menu = MENU_PATCH;
             return true;
         }
         else if (button == BTN_OK)
         {
-            menu = (menu & 0xff0f) | 0x10;
+            menu |= 0x10;
             return true;
         }
-        menu = (menu & 0xFFF0) | (get12Sel(button, menu & 0x0F, MOD_TOP_MENUS, 2));
+        menu = get12Sel(button, menu, MOD_LEV1_MENUS, MENU_FIRST);
     }
 
     // Display
@@ -188,60 +214,76 @@ bool Gui::topMenu(uint8_t mode, uint8_t button)
 
 bool Gui::presetMenu(uint8_t mode, uint8_t button)
 {
-    if (mode == MENU_LONG_PRESS)
+    if (mode == BTNMODE_LONG_PRESS)
     {
         return false;
     }
-    else if (mode == MENU_CLICK)
+    else if (mode == BTNMODE_CLICK)
     {
         if (button == BTN_OK)
         {
-            this->synth->execPreset(((menu & 0xf0)>>4) - 1);
+            this->synth->execPreset(((menu & SUBMENU_MASK) >> 4) - 1);
             button = BTN_BACK;
         }
         if (button == BTN_BACK)
         {
-            menu = (menu & 0x000F);
+            menu &= MENU_MASK;
             return true;
         }
-        menu = (menu & 0xFF0F) | (get12Sel(button, (menu & 0xF0) >> 4 , MOD_PRESET_MENUS, 1) << 4);
+        menu = (menu & MENU_MASK) | (get12Sel(button, (menu & SUBMENU_MASK) >> 4 , MOD_PRESET_MENUS, 1) << 4);
     }
 
     // Display
-    tm1638.writeln(presetMenuLabels[((menu & 0xF0) >> 4) - 1], 0);
+    tm1638.writeln(presetMenuLabels[((menu & SUBMENU_MASK) >> 4) - 1], 0);
     
     return false;
 }
 
 bool Gui::overtoneMenu(uint8_t mode, uint8_t button)
 {
+    if (mode == BTNMODE_LONG_PRESS)
+    {
+        return false;
+    }
+    else if (mode == BTNMODE_CLICK)
+    {
+        if (button == BTN_BACK)
+        {
+            menu &= MENU_MASK;
+            return true;
+        }
+    }
+    
+    // Display
+    tm1638.writeln(naLabel, 0);
+
     return false;
 }
 
 bool Gui::ahdsrMenu(uint8_t mode, uint8_t button)
 {
-    const PatchValueDef *def = &(patchValueDefs[PATCH_ADHSR_START + ((menu & 0x00F0)>>4) - 1]);
+    const PatchValueDef *def = &(patchValueDefs[PATCH_ADHSR_START + ((menu & SUBMENU_MASK)>>4) - 1]);
 
-    if (mode == MENU_LONG_PRESS)
+    if (mode == BTNMODE_LONG_PRESS)
     {
         return false;
     }
-    else if (mode == MENU_CLICK)
+    else if (mode == BTNMODE_CLICK)
     {
-        if (menu & 0x0F00)
+        if (menu & VALUEMENU_MASK)
         {
             if (button == BTN_OK)
             {
                 this->synth->patchChanged();
 
                 // If button == BTN_OK, return to previous menu and indicate a menu repaint
-                menu = menu & 0x00FF;
+                menu &= 0x00FF;
                 return true;
             }
             if (button == BTN_BACK)
             {
                 // If button == BTN_BACK, reset the menu and continue. getValue called with BTN_BACK will retreive the undo value, then continue to show the correct menu
-                menu = menu & 0x00FF;
+                menu &= 0x00FF;
             }
             getValue(button, def, patch);
         }
@@ -256,50 +298,46 @@ bool Gui::ahdsrMenu(uint8_t mode, uint8_t button)
             }
             if (button == BTN_BACK)
             {
-                menu = menu & 0x000F;
+                menu &= MENU_MASK;
                 return true;
             }
-            menu = (menu & 0xFF0F) | (get12Sel(button, (menu & 0xF0) >> 4 , MOD_AHDSR_MENUS, 1) << 4);
+            menu = (menu & ~SUBMENU_MASK) | (get12Sel(button, (menu & SUBMENU_MASK) >> 4 , MOD_AHDSR_MENUS, 1) << 4);
         }
     }
 
     // Display
-    if (menu & 0x0F00)
+    if (menu & VALUEMENU_MASK)
     {
         displayValue(def, patch);
     }
     else
     {
-        tm1638.writeln(ahdsrMenuLabels[((menu & 0xF0) >> 4) - 1], 0);
+        tm1638.writeln(ahdsrMenuLabels[((menu & SUBMENU_MASK) >> 4) - 1], 0);
     }    
     
     return false;
 }
 
-bool Gui::menu4(uint8_t mode, uint8_t button)
-{
-    return false;   
-}
-
 bool Gui::systemMenu(uint8_t mode, uint8_t button)
 {
-    char buf[10] = "        ";
-    if (mode == MENU_LONG_PRESS)
+    char buf[9] = "        ";
+
+    if (mode == BTNMODE_LONG_PRESS)
     {
         return false;
     }
-    else if (mode == MENU_CLICK)
+    else if (mode == BTNMODE_CLICK)
     {
         if (button == BTN_OK)
         {
-            switch (menu & 0xf0)
+            switch (menu & SUBMENU_MASK)
             {
-                case 0x10:
+                case SUBMENU_CPULOAD:
                     sprintf(buf, "%" PRIu32, lastCPULoadCount);
                     padSpace(buf, 8);
                     tm1638.writeln(buf, 0);
                     return false;
-                case 0x20:
+                case SUBMENU_CLKSPEED:
                     sprintf(buf, "%" PRIu32, F_CPU/1000000L);
                     padSpace(buf, 8);
                     buf[5] = 'M';
@@ -311,14 +349,14 @@ bool Gui::systemMenu(uint8_t mode, uint8_t button)
         }
         if (button == BTN_BACK)
         {
-            menu = (menu & 0x000F);
+            menu &= MENU_MASK;
             return true;
         }
-        menu = (menu & 0xFF0F) | (get12Sel(button, (menu & 0xf0) >> 4 , MOD_SYSTEM_MENUS, 1) << 4);
+        menu = (menu & ~SUBMENU_MASK) | (get12Sel(button, (menu & SUBMENU_MASK) >> 4 , MOD_SYSTEM_MENUS, 1) << 4);
     }
 
     // Display
-    tm1638.writeln(systemMenuLabels[((menu & 0xf0) >> 4) - 1], 0);
+    tm1638.writeln(systemMenuLabels[((menu & SUBMENU_MASK) >> 4) - 1], 0);
     
     return false;
 }
@@ -346,6 +384,15 @@ void Gui::displayValue(const PatchValueDef *def, Patch *patch)
         case NUMTYPE_PHASE:
             break;
     }
+    tm1638.writeln(buf, 0);
+}
+
+void Gui::displayUINT16(uint16_t value)
+{
+    char buf[9] = "        ";
+
+    sprintf(buf, "%" PRIu16, value);
+    padSpace(buf, 8);
     tm1638.writeln(buf, 0);
 }
 
@@ -528,11 +575,4 @@ void Gui::padSpace(char *buf, uint8_t max)
     buf[max] = 0;
 }
 
-// 0x0000 Welcome
-// 0x0001 Patch
-// 0x0002 Preset
-// 0x0003 Overtone
-// 0x0012 Preset/Sine
-// 0x0022 Preset/Tri
-// 0x0032 Preset/Saw
-// 0x0042 Preset/Square
+

@@ -1,5 +1,6 @@
 #include <arm_math.h>
 #include "wave.h"
+#include "gui.h"
 
 // If set to 0x2000 the TRI wave will distort when C-D-E-F are pressed
 #define MAX_AMP 0x1800LL
@@ -9,9 +10,9 @@ void Wave::update(int16_t *bp, bool clear)
     // 61290 med AHDSR 61525 med smart mult 61700 uden AHDSR
     int32_t shiftedVal;
     int16_t newValue;
-    for (int i = 0; i < audioBlockSamples; i++)
+    for (uint16_t i = 0; i < audioBlockSamples; i++)
     {
-        recalc:
+        // recalc:
         switch (ahdsr_stage)
         {
             case ATK_STAGE:
@@ -22,7 +23,7 @@ void Wave::update(int16_t *bp, bool clear)
                         atk += atk_d;
                         // atk -= atk_d;
                         break;
-                    case PATCH_AHDSR_SHAPE_EASE2:
+                    case PATCH_AHDSR_SHAPE_SQR:
                         atk = atk + 2 * atk_d - ((atk_idx * atk_dd)>>16);
                         atk_idx += 2;
                         break;
@@ -63,7 +64,7 @@ void Wave::update(int16_t *bp, bool clear)
                     case PATCH_AHDSR_SHAPE_LIN:
                         dec -= dec_d;
                         break;
-                    case PATCH_AHDSR_SHAPE_EASE2:
+                    case PATCH_AHDSR_SHAPE_SQR:
                         dec = dec - 2 * dec_d + ((dec_idx * dec_dd)>>16);
                         dec_idx += 2;
                         break;
@@ -86,12 +87,12 @@ void Wave::update(int16_t *bp, bool clear)
                     case PATCH_AHDSR_SHAPE_LIN:
                         rel -= rel_d;
                         break;
-                    case PATCH_AHDSR_SHAPE_EASE2:
+                    case PATCH_AHDSR_SHAPE_SQR:
                         rel = rel - 2 * rel_d + ((rel_idx * rel_dd)>>16);
                         rel_idx += 2;
                         break;
                 }
-
+                    
                 if (rel & 0x8000000000000000)
                 {
                     amp = 0L;
@@ -113,7 +114,7 @@ void Wave::update(int16_t *bp, bool clear)
         }
         
         shiftedVal = 0;
-        for (int o=0; o<num_ots; ++o)
+        for (int o = 0; o < num_ots; ++o)
         {        
             q31_t a = arm_sin_q31((uint32_t)((tone_phase[o] >> 15) & 0x7fffffff));    
             shiftedVal += ((a>>16) * tone_amp[o] * amp) >> 10;
@@ -126,21 +127,22 @@ void Wave::update(int16_t *bp, bool clear)
 
         newValue = (int16_t)(shiftedVal >> 15);
 
-        if (next_base_freq)
-        {
-            if  (lastValue < 0 && newValue >= 0)
-            {
-                actualReset(false);
-                next_base_freq = 0;
-                goto recalc;
-            }
-        }
+        // if (next_base_freq)
+        // {
+        //     if  (lastValue < 0 && newValue >= 0)
+        //     {
+        //         actualReset(false);
+        //         next_base_freq = 0;
+        //         goto recalc;
+        //     }
+        // }
 
         *bp = clear ? newValue : *bp + newValue;
         lastValue = newValue;       
 
         bp++;
     }
+    
 }
 
 void Wave::actualReset(bool releaseOnly)
@@ -217,7 +219,7 @@ void Wave::actualReset(bool releaseOnly)
     {
         // Fade out from current amp level
         freq_div = patch->ahdsr_release_time * sampleRate / 1000L;
-        rel = amp<<22;
+        rel = ((uint64_t)amp)<<22;
         rel_d = rel/freq_div;
         rel_dd = (rel_d*rel_d)>>16;
         ahdsr_stage = REL_STAGE;
@@ -291,9 +293,5 @@ void Wave::setPatch(Patch *patch)
 void Wave::reset(uint64_t base_freq)
 {
     next_base_freq = base_freq;
-    if (ahdsr_stage == OFF_STAGE)
-    {
-        actualReset(false);
-    }
-    
+    actualReset(false);
 }

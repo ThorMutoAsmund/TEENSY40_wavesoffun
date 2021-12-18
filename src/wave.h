@@ -16,7 +16,7 @@
 class Wave
 {
 public:
-	Wave(uint16_t audioBlockSamples, int sampleRate) : audioBlockSamples(audioBlockSamples), sampleRate(sampleRate), base_freq(440LL << 32)
+	Wave(byte idx, uint16_t audioBlockSamples, int sampleRate) : idx(idx), audioBlockSamples(audioBlockSamples), sampleRate(sampleRate), base_freq(440LL << 32)
     { 		
 	}
 	void update(int16_t *bp, bool clear);
@@ -25,6 +25,7 @@ public:
 	void release() { actualReset(true); }
 	uint8_t ahdsr_stage = OFF_STAGE;
 private:
+	byte idx;
 	Patch *patch;
 	uint16_t audioBlockSamples;
 	int sampleRate;

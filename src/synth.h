@@ -20,10 +20,10 @@ class Synth : public AudioStream
 {
 public:
 	Synth(void) : AudioStream(0, NULL), 
-        wave0(AUDIO_BLOCK_SAMPLES, (int) AUDIO_SAMPLE_RATE_EXACT),
-        wave1(AUDIO_BLOCK_SAMPLES, (int) AUDIO_SAMPLE_RATE_EXACT),
-        wave2(AUDIO_BLOCK_SAMPLES, (int) AUDIO_SAMPLE_RATE_EXACT),
-        wave3(AUDIO_BLOCK_SAMPLES, (int) AUDIO_SAMPLE_RATE_EXACT)
+        wave0(0, AUDIO_BLOCK_SAMPLES, (int) AUDIO_SAMPLE_RATE_EXACT),
+        wave1(1, AUDIO_BLOCK_SAMPLES, (int) AUDIO_SAMPLE_RATE_EXACT),
+        wave2(2, AUDIO_BLOCK_SAMPLES, (int) AUDIO_SAMPLE_RATE_EXACT),
+        wave3(3, AUDIO_BLOCK_SAMPLES, (int) AUDIO_SAMPLE_RATE_EXACT)
     { 	
         execPreset(PRESET_SINE);
         // patch.ot_type = PATCH_OT_BASE;
@@ -55,7 +55,8 @@ private:
     byte waveOn[NUM_WAVES] = { 0, 0, 0, 0 };
     uint64_t scaleF[12] = { 118111600633LL, 125134881887LL, 132575789176LL, 140459155838LL, 148811291875LL, 157660071765LL, 167035027489LL, 176967447090LL, 187490479095LL, 198639243145LL, 210450947204LL, 222965011735LL };
     byte someWaveOn = 0;
-    byte next = 0;
+    byte queue[NUM_WAVES] = { 0, 1, 2, 3 };
+    byte qptr = 0;
 };
 
 #endif

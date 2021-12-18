@@ -3,6 +3,10 @@
 		{
 			"name": "TEENSY40_mars",
 			"path": "."
+		},
+		{
+			"name": "ARDUINO_1601A",
+			"path": "..\\ARDUINO_1601A"
 		}
 	],
 	"settings": {
